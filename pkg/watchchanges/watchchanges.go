@@ -2,6 +2,7 @@ package watchchanges
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"os"
 	"sort"
@@ -62,29 +63,13 @@ func processLine(line string) {
 			fmt.Printf("Error: No old value for uid %s\n", uid)
 			return
 		}
-		newValue := object.String()
+		newValue := mustMarshalJson(object.Value())
 		oldValues[uid] = newValue
-		dmp := diffmatchpatch.New()
-		diffs := dmp.DiffMain(oldValue, newValue, false)
-		if noMeaningfulDiffs(diffs) {
-			return
+
+		diffText := renderDiff(oldValue, newValue)
+		if diffText != "" {
+			fmt.Printf(currentTime+boldYellow.Sprintf("MODIFIED")+": %s %s/%s - %s\n", kind, namespace, name, diffText)
 		}
-		var diffText strings.Builder
-		for _, diff := range diffs {
-			switch diff.Type {
-			case diffmatchpatch.DiffInsert:
-				diffText.WriteString(color.GreenString(diff.Text))
-			case diffmatchpatch.DiffDelete:
-				diffText.WriteString("\033[9m" + color.RedString(diff.Text) + "\033[0m")
-			case diffmatchpatch.DiffEqual:
-				text := diff.Text
-				if len(text) > 30 {
-					text = text[:27] + "..."
-				}
-				diffText.WriteString(text)
-			}
-		}
-		fmt.Printf(currentTime+boldYellow.Sprintf("MODIFIED")+": %s %s/%s - %s\n", kind, namespace, name, diffText.String())
 	}
 
 	switch eventType {
@@ -92,8 +77,12 @@ func processLine(line string) {
 		if oldValues[uid] != "" {
 			modified()
 		} else {
-			oldValues[uid] = object.String()
-			fmt.Printf(currentTime+boldGreen.Sprintf("ADDED")+": %s %s/%s\n", kind, namespace, name)
+			oldValues[uid] = mustMarshalJson(object.Value())
+			if printBodyOfAdded {
+				fmt.Printf(currentTime+boldGreen.Sprintf("ADDED")+": %s %s/%s - %s\n", kind, namespace, name, color.GreenString(oldValues[uid]))
+			} else {
+				fmt.Printf(currentTime+boldGreen.Sprintf("ADDED")+": %s %s/%s\n", kind, namespace, name)
+			}
 		}
 	case "MODIFIED":
 		modified()
@@ -102,6 +91,63 @@ func processLine(line string) {
 	default:
 		fmt.Printf(currentTime+"Unknown event type: %s\n", eventType)
 	}
+}
+
+var printFormattedJson = os.Getenv("PRINT_FORMATTED_JSON") == "true"
+var noEllipsis = os.Getenv("NO_ELLIPSIS") == "true"
+var printBodyOfAdded = os.Getenv("PRINT_BODY_OF_ADDED") == "true"
+
+func renderDiff(oldValue string, newValue string) string {
+	dmp := diffmatchpatch.New()
+	if printFormattedJson {
+		oldValue = mustFormatJSON(oldValue)
+		newValue = mustFormatJSON(newValue)
+	}
+	diffs := dmp.DiffMain(oldValue, newValue, false)
+	if noMeaningfulDiffs(diffs) {
+		return ""
+	}
+	var diffText strings.Builder
+	for _, diff := range diffs {
+		switch diff.Type {
+		case diffmatchpatch.DiffInsert:
+			diffText.WriteString(color.GreenString(diff.Text))
+		case diffmatchpatch.DiffDelete:
+			diffText.WriteString("\033[9m" + color.RedString(diff.Text) + "\033[0m")
+		case diffmatchpatch.DiffEqual:
+			text := diff.Text
+			if !noEllipsis && len(text) > 30 {
+				text = text[:27] + "..."
+			}
+			diffText.WriteString(text)
+		}
+	}
+	return diffText.String()
+}
+
+func mustMarshalJson(value interface{}) string {
+	result, err := json.MarshalIndent(value, "", "  ")
+	if err != nil {
+		panic(err)
+	}
+	return string(result)
+}
+
+func mustFormatJSON(inputJSON string) string {
+	var data interface{}
+
+	// Parse the input JSON into an interface{}
+	if err := json.Unmarshal([]byte(inputJSON), &data); err != nil {
+		panic(err)
+	}
+
+	// Marshal the interface{} back into an indented JSON string
+	formattedJSON, err := json.MarshalIndent(data, "", "    ") // You can customize the indentation here
+	if err != nil {
+		panic(err)
+	}
+
+	return string(formattedJSON)
 }
 
 func noMeaningfulDiffs(diffs []diffmatchpatch.Diff) bool {
