@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/KevinWang15/k/pkg/consts"
 	"github.com/fatih/color"
 	"github.com/sergi/go-diff/diffmatchpatch"
 	"github.com/tidwall/gjson"
@@ -17,6 +18,10 @@ import (
 var (
 	// Store old values keyed by uid
 	oldValues = make(map[string]string)
+
+	printFormattedJson = os.Getenv(consts.K_PRINT_FORMATTED_JSON) == "true"
+	noEllipsis         = os.Getenv(consts.K_NO_ELLIPSIS) == "true"
+	printBodyOfAdded   = os.Getenv(consts.K_PRINT_BODY_OF_ADDED) == "true"
 )
 
 func Run() {
@@ -92,10 +97,6 @@ func processLine(line string) {
 		fmt.Printf(currentTime+"Unknown event type: %s\n", eventType)
 	}
 }
-
-var printFormattedJson = os.Getenv("PRINT_FORMATTED_JSON") == "true"
-var noEllipsis = os.Getenv("NO_ELLIPSIS") == "true"
-var printBodyOfAdded = os.Getenv("PRINT_BODY_OF_ADDED") == "true"
 
 func renderDiff(oldValue string, newValue string) string {
 	dmp := diffmatchpatch.New()
