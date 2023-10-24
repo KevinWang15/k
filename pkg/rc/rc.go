@@ -54,7 +54,6 @@ function watch-changes() {
 	cmdToRun="$cmdToRun -ojson --output-watch-events --watch"
 	cmdToRun="while true; do $cmdToRun || break; done | k watch-changes"
 
-	echo cmdToRun=$cmdToRun
 	eval "$cmdToRun"
 }
 
