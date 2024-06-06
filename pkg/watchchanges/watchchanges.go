@@ -5,21 +5,33 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/KevinWang15/k/pkg/consts"
 	"github.com/fatih/color"
-	"github.com/sergi/go-diff/diffmatchpatch"
+	"github.com/pmezard/go-difflib/difflib"
 )
 
 var (
 	// Store old values keyed by uid
 	oldValues = make(map[string]string)
 
-	printFormattedJson = os.Getenv(consts.K_PRINT_FORMATTED_JSON) == "true"
-	noEllipsis         = os.Getenv(consts.K_NO_ELLIPSIS) == "true"
-	printBodyOfAdded   = os.Getenv(consts.K_PRINT_BODY_OF_ADDED) == "true"
+	printBodyOfAdded = os.Getenv(consts.K_PRINT_BODY_OF_ADDED) == "true"
+
+	contextLines = (func() int {
+		contextLinesEnv := os.Getenv(consts.K_DIFF_CONTEXT_LINES)
+		if contextLinesEnv != "" {
+			v, err := strconv.Atoi(contextLinesEnv)
+			if err != nil {
+				panic(fmt.Errorf("failed to parse %s: %w", consts.K_DIFF_CONTEXT_LINES, err))
+			}
+			return v
+		} else {
+			return 3
+		}
+	})()
 )
 
 func Run() {
@@ -87,7 +99,7 @@ func processObject(object map[string]interface{}, eventType string) {
 
 		diffText := renderDiff(oldValue, newValue)
 		if diffText != "" {
-			fmt.Printf(currentTime+boldYellow.Sprintf("MODIFIED")+": %s %s/%s - %s\n", kind, namespace, name, diffText)
+			fmt.Printf(currentTime+boldYellow.Sprintf("MODIFIED")+": %s %s/%s\n%s\n", kind, namespace, name, diffText)
 		}
 	}
 
@@ -113,31 +125,27 @@ func processObject(object map[string]interface{}, eventType string) {
 }
 
 func renderDiff(oldValue string, newValue string) string {
-	dmp := diffmatchpatch.New()
-	if printFormattedJson {
-		oldValue = mustFormatJSON(oldValue)
-		newValue = mustFormatJSON(newValue)
-	}
-	diffs := dmp.DiffMain(oldValue, newValue, false)
-	if noMeaningfulDiffs(diffs) {
-		return ""
-	}
-	var diffText strings.Builder
-	for _, diff := range diffs {
-		switch diff.Type {
-		case diffmatchpatch.DiffInsert:
-			diffText.WriteString(color.GreenString(diff.Text))
-		case diffmatchpatch.DiffDelete:
-			diffText.WriteString("\033[9m" + color.RedString(diff.Text) + "\033[0m")
-		case diffmatchpatch.DiffEqual:
-			text := diff.Text
-			if !noEllipsis && len(text) > 30 {
-				text = text[:27] + "..."
-			}
-			diffText.WriteString(text)
+	oldLines := difflib.SplitLines(oldValue)
+	newLines := difflib.SplitLines(newValue)
+
+	context := contextLines
+	if context == -1 {
+		if len(oldLines) > len(newLines) {
+			context = len(oldLines)
+		} else {
+			context = len(newLines)
 		}
 	}
-	return diffText.String()
+	diffString, err := difflib.GetUnifiedDiffString(difflib.UnifiedDiff{
+		A:       oldLines,
+		B:       newLines,
+		Context: context,
+	})
+	if err != nil {
+		panic(err)
+	}
+
+	return colorizeDiff(diffString)
 }
 
 func mustMarshalJson(value interface{}) string {
@@ -148,28 +156,17 @@ func mustMarshalJson(value interface{}) string {
 	return string(result)
 }
 
-func mustFormatJSON(inputJSON string) string {
-	var data interface{}
-
-	// Parse the input JSON into an interface{}
-	if err := json.Unmarshal([]byte(inputJSON), &data); err != nil {
-		panic(err)
-	}
-
-	// Marshal the interface{} back into an indented JSON string
-	formattedJSON, err := json.MarshalIndent(data, "", "    ") // You can customize the indentation here
-	if err != nil {
-		panic(err)
-	}
-
-	return string(formattedJSON)
-}
-
-func noMeaningfulDiffs(diffs []diffmatchpatch.Diff) bool {
-	for _, diff := range diffs {
-		if diff.Type != diffmatchpatch.DiffEqual {
-			return false
+func colorizeDiff(diffString string) string {
+	var colorizedDiff strings.Builder
+	for _, line := range strings.Split(diffString, "\n") {
+		switch {
+		case strings.HasPrefix(line, "+"):
+			colorizedDiff.WriteString("\033[32m" + line + "\033[0m\n") // Green for additions
+		case strings.HasPrefix(line, "-"):
+			colorizedDiff.WriteString("\033[31m" + line + "\033[0m\n") // Red for deletions
+		default:
+			colorizedDiff.WriteString(line + "\n")
 		}
 	}
-	return true
+	return colorizedDiff.String()
 }
