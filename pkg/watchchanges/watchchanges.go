@@ -5,14 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"sort"
 	"strings"
 	"time"
 
 	"github.com/KevinWang15/k/pkg/consts"
 	"github.com/fatih/color"
 	"github.com/sergi/go-diff/diffmatchpatch"
-	"github.com/tidwall/gjson"
 )
 
 var (
@@ -47,21 +45,35 @@ var (
 )
 
 func processLine(line string) {
-	eventType := gjson.Get(line, "type").String()
-	object := gjson.Get(line, "object")
-	kind := object.Get("kind").String()
-	metadata := object.Get("metadata")
-	namespace := metadata.Get("namespace").String()
-	name := metadata.Get("name").String()
-	uid := metadata.Get("uid").String()
+	parsedLine := map[string]interface{}{}
+	err := json.Unmarshal([]byte(line), &parsedLine)
+	if err != nil {
+		panic(fmt.Errorf("failed to unmarshal line: %w", err))
+	}
+
+	eventType := parsedLine["type"].(string)
+	object := parsedLine["object"].(map[string]interface{})
+
+	kind := object["kind"].(string)
+	if strings.HasSuffix(kind, "List") && object["items"] != nil {
+		for _, item := range object["items"].([]interface{}) {
+			processObject(item.(map[string]interface{}), eventType)
+		}
+	} else {
+		processObject(object, eventType)
+	}
+}
+
+func processObject(object map[string]interface{}, eventType string) {
+	kind := object["kind"].(string)
+	metadata := object["metadata"].(map[string]interface{})
+	namespace := metadata["namespace"].(string)
+	name := metadata["name"].(string)
+	uid := metadata["uid"].(string)
 
 	// Remove managedFields and resourceVersion
-	objectMap := object.Map()
-	metadataMap := objectMap["metadata"].Map()
-	delete(metadataMap, "managedFields")
-	delete(metadataMap, "resourceVersion")
-	objectMap["metadata"] = gjson.Parse(gjsonMapToJson(metadataMap))
-	object = gjson.Parse(gjsonMapToJson(objectMap))
+	delete(metadata, "managedFields")
+	delete(metadata, "resourceVersion")
 	currentTime := faintWhite.Sprintf(time.Now().Format(time.StampMilli) + " ")
 
 	modified := func() {
@@ -70,7 +82,7 @@ func processLine(line string) {
 			fmt.Printf("Error: No old value for uid %s\n", uid)
 			return
 		}
-		newValue := mustMarshalJson(object.Value())
+		newValue := mustMarshalJson(object)
 		oldValues[uid] = newValue
 
 		diffText := renderDiff(oldValue, newValue)
@@ -84,7 +96,7 @@ func processLine(line string) {
 		if oldValues[uid] != "" {
 			modified()
 		} else {
-			oldValues[uid] = mustMarshalJson(object.Value())
+			oldValues[uid] = mustMarshalJson(object)
 			if printBodyOfAdded {
 				fmt.Printf(currentTime+boldGreen.Sprintf("ADDED")+": %s %s/%s - %s\n", kind, namespace, name, color.GreenString(oldValues[uid]))
 			} else {
@@ -160,24 +172,4 @@ func noMeaningfulDiffs(diffs []diffmatchpatch.Diff) bool {
 		}
 	}
 	return true
-}
-
-func gjsonMapToJson(objectMap map[string]gjson.Result) string {
-	var builder strings.Builder
-	builder.WriteString("{")
-
-	// Sort the keys
-	keys := make([]string, 0, len(objectMap))
-	for key := range objectMap {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-
-	// Iterate over the sorted keys
-	for _, key := range keys {
-		value := objectMap[key]
-		builder.WriteString(fmt.Sprintf("\"%s\": %s,", key, value.String()))
-	}
-	builder.WriteString("}")
-	return builder.String()
 }
