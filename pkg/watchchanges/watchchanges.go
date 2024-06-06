@@ -27,6 +27,8 @@ var (
 func Run() {
 
 	scanner := bufio.NewScanner(os.Stdin)
+	buf := make([]byte, 0, 10*64*1024)
+	scanner.Buffer(buf, 10*1024*1024)
 	for scanner.Scan() {
 		line := scanner.Text()
 		processLine(line)
