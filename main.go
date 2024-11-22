@@ -13,6 +13,7 @@ func main() {
 	rootCmd.AddCommand(cmd.RcCmd)
 	rootCmd.AddCommand(cmd.WatchChangesCmd)
 	rootCmd.AddCommand(cmd.GetAllClustersCmd)
+	rootCmd.AddCommand(cmd.ImportCommand)
 
 	if err := rootCmd.Execute(); err != nil {
 		panic(err)

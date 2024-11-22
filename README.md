@@ -49,6 +49,23 @@ You can define your cluster configurations and shortcuts in a `config.json` file
 }
 ```
 
+### Importing configuration from existing KUBECONFIG
+
+You can import your existing Kubernetes configurations from your KUBECONFIG file into the k tool. This will automatically convert all your clusters, including their authentication details, into the k configuration format.
+To import your existing configurations:
+
+```bash
+# Create config directory and file
+mkdir -p ~/.k
+touch ~/.k/config.json
+export K_CONFIG_FILE=~/.k/config.json
+
+# Import your clusters from KUBECONFIG
+k import
+```
+
+This will import all your clusters from your KUBECONFIG (default: `~/.kube/config`), including their authentication settings. Existing clusters in your `k` configuration will be updated if they share the same name.
+
 ## Features
 
 ### Generating Multiple Kubeconfigs
