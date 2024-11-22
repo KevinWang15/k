@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/KevinWang15/k/pkg/model"
+	"github.com/KevinWang15/k/pkg/utils"
 	"github.com/spf13/cobra"
 
 	"k8s.io/client-go/tools/clientcmd"
@@ -48,11 +49,7 @@ func importKubeconfig() error {
 		return fmt.Errorf("failed to load kubeconfig: %w", err)
 	}
 
-	// Get current config file path
-	configPath := os.Getenv("K_CONFIG_FILE")
-	if configPath == "" {
-		return fmt.Errorf("K_CONFIG_FILE environment variable not set")
-	}
+	configPath := utils.GetConfigPath()
 
 	// Load existing config or create new one
 	config := &model.Config{
@@ -76,48 +73,14 @@ func importKubeconfig() error {
 	// Convert kubeconfig clusters to our model
 	for name, cluster := range kubeconfig.Clusters {
 		newCluster := model.Cluster{
-			Name:                  name,
-			Server:                cluster.Server,
-			InsecureSkipTLSVerify: cluster.InsecureSkipTLSVerify,
+			Name:    name,
+			Cluster: model.FromAPICluster(cluster),
 		}
 
-		if cluster.CertificateAuthorityData != nil {
-			newCluster.CertificateAuthorityData = cluster.CertificateAuthorityData
-		} else if cluster.CertificateAuthority != "" {
-			caData, err := readAndEncodeFile(cluster.CertificateAuthority)
-			if err != nil {
-				return fmt.Errorf("failed to read certificate authority file: %w", err)
-			}
-			newCluster.CertificateAuthorityData = caData
-		}
-
-		// Get auth info for this cluster
 		for _, context := range kubeconfig.Contexts {
 			if context.Cluster == name {
 				if authInfo, exists := kubeconfig.AuthInfos[context.AuthInfo]; exists {
-					// Handle client certificate data
-					if authInfo.ClientCertificateData != nil {
-						newCluster.ClientCertificateData = authInfo.ClientCertificateData
-					} else if authInfo.ClientCertificate != "" {
-						certData, err := readAndEncodeFile(authInfo.ClientCertificate)
-						if err != nil {
-							return fmt.Errorf("failed to read client certificate file: %w", err)
-						}
-						newCluster.ClientCertificateData = certData
-					}
-
-					// Handle client key data
-					if authInfo.ClientKeyData != nil {
-						newCluster.ClientKeyData = authInfo.ClientKeyData
-					} else if authInfo.ClientKey != "" {
-						keyData, err := readAndEncodeFile(authInfo.ClientKey)
-						if err != nil {
-							return fmt.Errorf("failed to read client key file: %w", err)
-						}
-						newCluster.ClientKeyData = keyData
-					}
-
-					newCluster.BearerToken = authInfo.Token
+					newCluster.User = model.FromAPIAuthInfo(authInfo)
 				}
 			}
 		}
@@ -146,7 +109,7 @@ func importKubeconfig() error {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 
-	fmt.Printf("Successfully imported %d clusters from kubeconfig\n", len(kubeconfig.Clusters))
+	fmt.Printf("Successfully imported %d clusters from kubeconfig\nRemember to `source <(k rc)` for it to take effect.", len(kubeconfig.Clusters))
 	return nil
 }
 

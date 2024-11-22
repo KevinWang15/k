@@ -8,7 +8,7 @@ import (
 var RcCmd = &cobra.Command{
 	Use:   "rc",
 	Short: "generate rc commands",
-	Long:  `generate rc commands. "export K_CONFIG_FILE=..; source <(k rc)" in your .profile`,
+	Long:  `generate rc commands. "source <(k rc)" in your .profile`,
 	Run: func(cmd *cobra.Command, args []string) {
 		rc.Run()
 	},

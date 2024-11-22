@@ -15,39 +15,10 @@ go install .
 After installation, you need to add the following lines to your `.bashrc` or `.zshrc` file:
 
 ```bash
-export K_CONFIG_FILE=/path/to/config.json
 source <(k rc)
 ```
 
 ## Configuration
-
-You can define your cluster configurations and shortcuts in a `config.json` file. Here is an example:
-
-```json
-{
-  "clusters": [
-    {
-      "name": "l",
-      "server": "https://localhost:6443",
-      "insecure-skip-tls-verify": true,
-      "bearerToken": "abc"
-    },
-    {
-      "name": "l2",
-      "server": "https://localhost:16443",
-      "insecure-skip-tls-verify": true,
-      "bearerToken": "123"
-    }
-  ],
-  
-  "shortcuts": {
-    "gp": "get pod",
-    "gd": "get deploy",
-    "gsvc": "get svc",
-    "ci": "cluster-info"
-  }
-}
-```
 
 ### Importing configuration from existing KUBECONFIG
 
@@ -55,16 +26,14 @@ You can import your existing Kubernetes configurations from your KUBECONFIG file
 To import your existing configurations:
 
 ```bash
-# Create config directory and file
-mkdir -p ~/.k
-touch ~/.k/config.json
-export K_CONFIG_FILE=~/.k/config.json
-
-# Import your clusters from KUBECONFIG
 k import
 ```
 
 This will import all your clusters from your KUBECONFIG (default: `~/.kube/config`), including their authentication settings. Existing clusters in your `k` configuration will be updated if they share the same name.
+
+### Configuration
+
+Check out the configuration located at `~/.k/config.json`. 
 
 ## Features
 
@@ -89,12 +58,25 @@ Instead of:
 kubectl --kubeconfig ~/.k/kubeconfigs/l get pods
 ```
 
-You can also define custom shortcuts in the `shortcuts` section of your `config.json` file.
+You can also define custom shortcuts in the `shortcuts` section of your `~/.k/config.json` file.
 
 For example, if you have `"gp": "get pod"`, then
 
 ```
 klgp=kubectl --kubeconfig ~/.k/kubeconfigs/l get pods
+```
+
+You can define shortcuts in your `~/.k/config.json` file as follows:
+
+```json
+{
+  "shortcuts": {
+    "gp": "get pod",
+    "gd": "get deploy",
+    "gsvc": "get svc",
+    "ci": "cluster-info"
+  }
+}
 ```
 
 ### Quick Namespace Switching

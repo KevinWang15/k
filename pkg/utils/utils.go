@@ -3,6 +3,7 @@ package utils
 import (
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"io/ioutil"
 	"os"
 
@@ -10,14 +11,31 @@ import (
 	"github.com/KevinWang15/k/pkg/model"
 )
 
-func GetConfig() model.Config {
-	if os.Getenv(consts.K_CONFIG_FILE) == "" {
-		panic("K_CONFIG_FILE is not set")
+func GetConfigPath() string {
+
+	dir := consts.K_HOME_DIR
+	err := os.MkdirAll(consts.K_HOME_DIR, os.ModePerm)
+	if err != nil {
+		panic(fmt.Errorf("trying to initialize k config: create dir %q error: %s", consts.K_HOME_DIR, err.Error()))
 	}
 
-	bytes, err := ioutil.ReadFile(os.Getenv(consts.K_CONFIG_FILE))
+	configJson := fmt.Sprintf("%s/%s", dir, "config.json")
+	if _, err := os.Stat(configJson); os.IsNotExist(err) {
+		err = ioutil.WriteFile(configJson, []byte("{}"), fs.ModePerm)
+		if err != nil {
+			panic(fmt.Errorf("trying to initialize k config: write file %q error: %s", configJson, err.Error()))
+		}
+	}
+
+	return configJson
+}
+
+func GetConfig() model.Config {
+
+	configPath := GetConfigPath()
+	bytes, err := ioutil.ReadFile(configPath)
 	if err != nil {
-		panic(fmt.Errorf("read file %s error: %s", os.Getenv(consts.K_CONFIG_FILE), err.Error()))
+		panic(fmt.Errorf("read file %s error: %s", configPath, err.Error()))
 	}
 
 	var config model.Config

@@ -86,20 +86,6 @@ func generateKubeConfigForCluster(cluster model.Cluster) {
 	kubeconfig := &api.Config{
 		Kind:       "Config",
 		APIVersion: "v1",
-		Clusters: map[string]*api.Cluster{
-			"default": {
-				Server:                   cluster.Server,
-				InsecureSkipTLSVerify:    cluster.InsecureSkipTLSVerify,
-				CertificateAuthorityData: cluster.CertificateAuthorityData,
-			},
-		},
-		AuthInfos: map[string]*api.AuthInfo{
-			"default": {
-				Token:                 cluster.BearerToken,
-				ClientKeyData:         cluster.ClientKeyData,
-				ClientCertificateData: cluster.ClientCertificateData,
-			},
-		},
 		Contexts: map[string]*api.Context{
 			"default": {
 				Cluster:  "default",
@@ -107,6 +93,14 @@ func generateKubeConfigForCluster(cluster model.Cluster) {
 			},
 		},
 		CurrentContext: "default",
+	}
+
+	kubeconfig.Clusters = map[string]*api.Cluster{
+		"default": cluster.Cluster.ToAPICluster(),
+	}
+
+	kubeconfig.AuthInfos = map[string]*api.AuthInfo{
+		"default": cluster.User.ToAPIAuthInfo(),
 	}
 
 	bytes, err := clientcmd.Write(*kubeconfig)
