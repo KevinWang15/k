@@ -79,9 +79,30 @@ func processLine(line string) {
 func processObject(object map[string]interface{}, eventType string) {
 	kind := object["kind"].(string)
 	metadata := object["metadata"].(map[string]interface{})
-	namespace := metadata["namespace"].(string)
-	name := metadata["name"].(string)
-	uid := metadata["uid"].(string)
+
+	// Get values with nil checks
+	var namespace, name, uid string
+
+	// Handle namespace - it might be nil for cluster-scoped resources
+	if ns, exists := metadata["namespace"]; exists && ns != nil {
+		namespace = ns.(string)
+	} else {
+		namespace = "<no-namespace>"
+	}
+
+	// Handle name - required field in Kubernetes
+	if n, exists := metadata["name"]; exists && n != nil {
+		name = n.(string)
+	} else {
+		name = "<no-name>"
+	}
+
+	// Handle UID - required field in Kubernetes
+	if u, exists := metadata["uid"]; exists && u != nil {
+		uid = u.(string)
+	} else {
+		uid = fmt.Sprintf("%s/%s/%s", kind, namespace, name)
+	}
 
 	// Remove managedFields and resourceVersion
 	delete(metadata, "managedFields")
